@@ -17,7 +17,7 @@ import sys
 import ctypes
 import itertools
 import textwrap
-from typing import final
+from typing import final, Any
 import warnings
 from ctypes.util import find_library
 from abc import ABC, abstractmethod
@@ -158,6 +158,24 @@ class LibController(ABC):
         return getattr(
             self.dynlib, f"{self._symbol_prefix}{name}{self._symbol_suffix}", None
         )
+
+
+class ThreadScopedController(ABC):
+    """
+    Provides a thread-number-setting API that only affects the current thread.
+
+    Useful in cases where there are two different APIs provided by the underlying library.
+    """
+
+    @abstractmethod
+    def set_num_threads_current_thread(self, num_threads: int) -> Any:
+        """
+        Set the maximum number of threads to use in library operations started
+        from the current thread.
+
+        Unlike ``set_num_threads``, which may have different scopes, this must
+        have thread-local scope only.
+        """
 
 
 class OpenBLASController(LibController):
@@ -423,7 +441,7 @@ class FlexiBLASController(LibController):
             raise RuntimeError(f"Failed to switch to backend {backend!r}.")
 
 
-class MKLController(LibController):
+class MKLController(LibController, ThreadScopedController):
     """Controller class for MKL"""
 
     user_api = "blas"
@@ -445,6 +463,12 @@ class MKLController(LibController):
 
     def set_num_threads(self, num_threads):
         set_func = getattr(self.dynlib, "MKL_Set_Num_Threads", lambda num_threads: None)
+        return set_func(num_threads)
+
+    def set_num_threads_current_thread(self, num_threads: int) -> Any:
+        set_func = getattr(
+            self.dynlib, "MKL_Set_Num_Threads_Local", lambda num_threads: None
+        )
         return set_func(num_threads)
 
     def get_version(self):
