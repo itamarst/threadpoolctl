@@ -63,7 +63,7 @@ def test_determine_thread_limit_scope_processwide(default: int) -> None:
 
 
 @pytest.mark.skipif(
-    sys.platform != "linux", reason="We only hardcoded Linux-specific behavior"
+    sys.platform != "linux", reason="Non-Linux OpenMP might be different"
 )
 @pytest.mark.parametrize(
     ["select_filter", "expected_thread_limit_scope"],
