@@ -73,17 +73,15 @@ def test_determine_thread_limit_scope_processwide(default: int) -> None:
         (
             {"internal_api": "openblas"},
             _ThreadLimitScope.PROCESS,
-            lambda lib: lib.threading_layer == "pthreads"
+            lambda lib: lib.threading_layer == "pthreads",
         ),
-        (
-            {"user_api": "openmp"},
-            _ThreadLimitScope.CURRENT_THREAD,
-            lambda _lib: True
-        ),
+        ({"user_api": "openmp"}, _ThreadLimitScope.CURRENT_THREAD, lambda _lib: True),
     ],
 )
 def test_api_scope(
-        select_filter: dict[str, str], expected_thread_limit_scope: str, extra_check: Callable[[LibController], bool]
+    select_filter: dict[str, str],
+    expected_thread_limit_scope: str,
+    extra_check: Callable[[LibController], bool],
 ) -> None:
     """
     Check ``_determine_thread_limit_scope()`` against libraries with known
