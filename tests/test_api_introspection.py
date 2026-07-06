@@ -4,11 +4,13 @@ Tests for get/set number of threads API introspection.
 
 import sys
 from threading import local as threadlocal
+from typing import Callable
 
 import pytest
 
 from threadpoolctl import (
     _ThreadLimitScope,
+    LibController,
     _determine_thread_limit_scope,
     ThreadpoolController,
 )
@@ -66,20 +68,22 @@ def test_determine_thread_limit_scope_processwide(default: int) -> None:
     sys.platform != "linux", reason="Non-Linux OpenMP might be different"
 )
 @pytest.mark.parametrize(
-    ["select_filter", "expected_thread_limit_scope"],
+    ["select_filter", "expected_thread_limit_scope", "extra_check"],
     [
         (
-            {"internal_api": "openblas", "threading_layer": "pthreads"},
+            {"internal_api": "openblas"},
             _ThreadLimitScope.PROCESS,
+            lambda lib: lib.threading_layer == "pthreads"
         ),
         (
             {"user_api": "openmp"},
             _ThreadLimitScope.CURRENT_THREAD,
+            lambda _lib: True
         ),
     ],
 )
 def test_api_scope(
-    select_filter: dict[str, str], expected_thread_limit_scope: str
+        select_filter: dict[str, str], expected_thread_limit_scope: str, extra_check: Callable[[LibController], bool]
 ) -> None:
     """
     Check ``_determine_thread_limit_scope()`` against libraries with known
@@ -91,6 +95,8 @@ def test_api_scope(
         pytest.skip(f"{select_filter} controller not found")
 
     for lib in controller.lib_controllers:
+        if not extra_check(lib):
+            pytest.skip("extra check returned false")
         assert (
             _determine_thread_limit_scope(lib.get_num_threads, lib.set_num_threads)
             == expected_thread_limit_scope
