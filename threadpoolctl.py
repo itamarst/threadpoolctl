@@ -418,7 +418,7 @@ class FlexiBLASController(LibController):
     def current_backend(self):
         return self._get_current_backend()
 
-    def info(self, debugging_info=True):
+    def info(self, debugging_info: bool = False):
         """Return relevant info wrapped in a dict"""
         # We override the info method because the loaded and current backends
         # are dynamic properties
