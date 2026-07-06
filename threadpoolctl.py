@@ -203,15 +203,15 @@ class LibController(ABC):
         self.version = self.get_version()
         self.set_additional_attributes()
 
-    def info(self, extra_info: bool = False):
+    def info(self, debugging_info: bool = False):
         """Return relevant info wrapped in a dict.
 
         Parameters
         ----------
-        extra_info : bool
+        debugging_info : bool
 
-            Include extra fields which requires more intrusive actions to
-            obtain.
+            Include extra fields which require more intrusive actions to
+            obtain, and which can't always reliably be determined.
         """
         hidden_attrs = ("dynlib", "parent", "_symbol_prefix", "_symbol_suffix")
         result = {
@@ -220,7 +220,7 @@ class LibController(ABC):
             "num_threads": self.num_threads,
             **{k: v for k, v in vars(self).items() if k not in hidden_attrs},
         }
-        if extra_info:
+        if debugging_info:
             result["thread_limit_scope"] = _determine_thread_limit_scope(
                 self.get_num_threads, self.set_num_threads
             ).name.lower()
@@ -649,7 +649,7 @@ def _realpath(filepath):
 
 
 @_format_docstring(USER_APIS=list(_ALL_USER_APIS), INTERNAL_APIS=_ALL_INTERNAL_APIS)
-def threadpool_info(extra_info: bool = False):
+def threadpool_info(debugging_info: bool = False):
     """Return the maximal number of threads for each detected library.
 
     Return a list with all the supported libraries that have been found. Each
@@ -666,13 +666,14 @@ def threadpool_info(extra_info: bool = False):
 
     Parameters
     ----------
-    extra_info : bool
-        Include extra fields which requires more intrusive actions to obtain.
+    debugging_info : bool
+        Include extra fields which require more intrusive actions to obtain,
+        and which can't always reliably be determined.
 
         - "thread_limit_scope": When setting the number of threads, what is
           affected. Possible values are "process", "current_thread", "unknown".
     """
-    return ThreadpoolController().info(extra_info)
+    return ThreadpoolController().info(debugging_info)
 
 
 class _ThreadpoolLimiter:
@@ -932,17 +933,17 @@ class ThreadpoolController:
         new_controller.lib_controllers = lib_controllers
         return new_controller
 
-    def info(self, extra_info: bool = False):
+    def info(self, debugging_info: bool = False):
         """Return lib_controllers info as a list of dicts.
 
         Parameters
         ----------
-        extra_info : bool
-            Include extra fields which requires more intrusive actions to
-            obtain.
+        debugging_info : bool
+            Include extra fields which require more intrusive actions to
+            obtain, and which can't always reliably be determined.
         """
         return [
-            lib_controller.info(extra_info=extra_info)
+            lib_controller.info(debugging_info=debugging_info)
             for lib_controller in self.lib_controllers
         ]
 
@@ -1408,7 +1409,7 @@ def _main():
     if options.command:
         exec(options.command)
 
-    print(json.dumps(threadpool_info(extra_info=True), indent=2))
+    print(json.dumps(threadpool_info(debugging_info=True), indent=2))
 
 
 if __name__ == "__main__":
