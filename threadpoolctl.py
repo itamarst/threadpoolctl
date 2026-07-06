@@ -670,7 +670,7 @@ def threadpool_info(extra_info: bool = False):
         Include extra fields which requires more intrusive actions to obtain.
 
         - "thread_limit_scope": When setting the number of threads, what is
-          affected. Possible values are "process", "current_thread".
+          affected. Possible values are "process", "current_thread", "unknown".
     """
     return ThreadpoolController().info(extra_info)
 
