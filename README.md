@@ -43,7 +43,7 @@ oversubscription issues.
   pytest
   ```
 
-## Usage
+## Usage: Introspection and debugging
 
 ### Command Line Interface
 
@@ -152,6 +152,104 @@ The state of these libraries is also accessible through the object oriented API:
 True
 ```
 
+## Usage when using Python threads: Restricting Controlled Library Thread Pool Sizes
+
+There a two scenarios in which you might want to use `threadpoolctl`; each
+requires you to use different APIs.
+
+1. You will be parallelizing work using a Python thread pool, and your goal is
+   therefore to limit controlled libraries' thread pool sizes when used from
+   Python threads.
+2. You do not expect to use any Python threads, so all the work will be started
+   directly from the main thread in the process.
+
+This section will cover the former case, and the latter is covered in the next
+usage section.
+
+### Setting the Maximum Size of Thread-Pools, When Python Thread Pools Are Used
+
+Limiting thread pool size in controlled libraries requires a two-step process.
+Importantly, each Python thread must call a method to limit controlled libraries
+in that thread. With Python's `multiprocessing.pool.ThreadPool`, you can do so
+by passing in an initializer function that will get called on thread startup.
+
+```python
+from threadpoolctl import LimiterForPythonThreads
+from multiprocessing.pool import ThreadPool
+
+with limit_for_python_threads(limits=1, user_api='blas') as limiter:
+    # Make sure each Python thread calls limiter.limit_in_pythread(). If you're
+    # using another thread pool class, you will need to do some other way.
+    with ThreadPool(4, initializer=limiter.limit_in_pythread) as pool:
+        # ... run some BLAS-using code in the thread pool ...
+```
+
+To prevent loading shared libraries repeatedly, you can reuse a
+`ThreadpoolController` object:
+
+```python
+from threadpoolctl import ThreadpoolController
+
+# This won't have any side-effects:
+CONTROLLER = ThreadpoolController()
+
+with CONTROLLER.limit_for_python_threads(limits=1) as limiter:
+    with ThreadPool(4, initializer=limiter.limit_in_pythread) as pool:
+        # ... run some BLAS-using code in the thread pool ...
+
+# Later...
+with CONTROLLER.limit_for_python_threads(limits=2) as limiter:
+    with ThreadPool(2, initializer=limiter.limit_in_pythread) as pool:
+        # ... run some BLAS-using code in the thread pool ...
+```
+
+### Switching Back And Forth Between Main Thread and Python Threads
+
+Unfortunately not all controlled libraries providing limiting APIs that are
+thread-specific. Limiting some libraries' thread pool sizes can therefore impact
+the whole process. This makes switching back and forth between running code that
+uses these libraries in Python threads and running it in the main thread a bit
+more complex: you need to set the limits each time you switch back and forth.
+
+Let's say your computer has 4 cores, and you're using some OpenMP API.
+
+```python
+POOL = ThreadPool(4)
+CONTROLLER = ThreadpoolController()
+
+# 1. Run some work in a Python thread pool, which then runs in OpenMP.
+with CONTROLLER.limit_for_python_threads(limits=1) as limiter:
+
+    def limit_then_do_work(*args, **kwargs):
+        # Set a limit on OpenMP in the current thread:
+        limiter.limit_in_pythread()
+        # Do the actual work:
+        return do_real_work_with_openmp(*args, **kwargs)
+
+    results = POOL.map(limit_then_do_work, args)
+
+
+# 2. Run some work directly in main thread, using OpenMP.
+
+# Use API for for non-Python threads, see next section for more:
+with CONTROLLER.limit(limits=1):
+    results2 = do_more_work_with_openmp(results)
+
+
+# 3. Do more work in a Python thread pool:
+with CONTROLLER.limit_for_python_threads(limits=1) as limiter:
+
+    def limit_then_do_work2(*args, **kwargs):
+        limiter.limit_in_pythread()
+        return do_even_more_real_work_with_openmp(*args, **kwargs)
+
+    results3 = POOL.map(limit_then_do_work2, results2)
+```
+
+## Usage for no Python threads: Restricting Controlled Library Thread Pool Sizes
+
+This covers APIs to use when you don't expect to use Python thread pools to parallelize work.
+
 ### Setting the Maximum Size of Thread-Pools
 
 Control the number of threads used by the underlying runtime libraries
@@ -184,11 +282,17 @@ however not act on libraries loaded after the instantiation of the
 ...     a_squared = a @ a
 ```
 
+This should only be used for APIs you expect to be called from the main thread
+of a process, without the use of any Python thread pools.
+
 ### Restricting the limits to the scope of a function
 
 `threadpool_limits` and `ThreadpoolController` can also be used as decorators to set
 the maximum number of threads used by the supported libraries at a function level. The
-decorators are accessible through their `wrap` method:
+decorators are accessible through their `wrap` method.
+
+This should only be used for functions you expect to be called from the main
+thread of a process, without the use of any Python thread pools.
 
 ```python
 >>> from threadpoolctl import ThreadpoolController, threadpool_limits
@@ -204,6 +308,8 @@ decorators are accessible through their `wrap` method:
 ...     a_squared = a @ a
 ...
 ```
+
+## Usage: Additional APIs and details
 
 ### Switching the FlexiBLAS backend
 
@@ -291,6 +397,7 @@ that this part of the API is experimental and subject to change without deprecat
 You can observe that the previously linked OpenBLAS shared object stays loaded by
 the Python program indefinitely, but FlexiBLAS itself no longer delegates BLAS calls
 to OpenBLAS as indicated by the `current_backend` attribute.
+
 ### Writing a custom library controller
 
 Currently, `threadpoolctl` has support for `OpenMP` and the main `BLAS` libraries.
