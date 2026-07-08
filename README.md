@@ -158,10 +158,12 @@ There a two scenarios in which you might want to use `threadpoolctl`; each
 requires you to use different APIs.
 
 1. You will be parallelizing work using a Python thread pool, and your goal is
-   therefore to limit controlled libraries' thread pool sizes when used from
-   Python threads.
+   therefore to limit controlled libraries' thread pool sizes when
+   concurrently called from Python threads. This case is a bit more
+   complex to handle properly and requires a bit more verbose code.
 2. You do not expect to use any Python threads, so all the work will be started
-   directly from the main thread in the process.
+   directly from the main thread in the process. This is a simple case
+   where we can globally set thread limits.
 
 This section will cover the former case, and the latter is covered in the next
 usage section.
