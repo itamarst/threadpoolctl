@@ -73,6 +73,12 @@ def test_determine_thread_limit_scope_processwide(default: int) -> None:
         (
             {"internal_api": "openblas"},
             _ThreadLimitScope.PROCESS,
+            # Different backends have different behavior; on Linux OpenMP is
+            # thread-local, for example, for libgomp/libomp at least. Since it
+            # depends on the specific OpenMP behavior, and since the goal here
+            # iin any case is to test _determine_thread_limit_scope()'s API
+            # specific ability to detect process-scoped APIs, we only check
+            # pthreads here.
             lambda lib: lib.threading_layer == "pthreads",
         ),
         ({"user_api": "openmp"}, _ThreadLimitScope.CURRENT_THREAD, lambda _lib: True),
