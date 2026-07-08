@@ -1,3 +1,10 @@
+Unreleased
+==============
+
+- Added the ability to check whether a limiting API
+  affects just the current thread or the whole process. Mainly aimed at debugging and diagnostics, and somewhat unreliable, it is therefore enabled by default only for command-line usage.
+  https://github.com/joblib/threadpoolctl/pull/213
+
 3.6.0 (2025-03-13)
 ==================
 
