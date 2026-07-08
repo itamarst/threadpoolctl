@@ -172,17 +172,18 @@ usage section.
 
 Limiting thread pool size in controlled libraries requires a two-step process.
 Importantly, each Python thread must call a method to limit controlled libraries
-in that thread. With Python's `multiprocessing.pool.ThreadPool`, you can do so
-by passing in an initializer function that will get called on thread startup.
+in that thread. With Python's `concurrent.futures.ThreadPoolExecutor`, you can
+do so by passing in an initializer function that will get called on thread
+startup.
 
 ```python
 from threadpoolctl import LimiterForPythonThreads
-from multiprocessing.pool import ThreadPool
+from concurrent.futures import ThreadPoolExecutor
 
 with limit_for_python_threads(limits=1, user_api='blas') as limiter:
     # Make sure each Python thread calls limiter.limit_in_pythread(). If you're
     # using another thread pool class, you will need to do some other way.
-    with ThreadPool(4, initializer=limiter.limit_in_pythread) as pool:
+    with ThreadPoolExecutor(4, initializer=limiter.limit_in_pythread) as pool:
         # ... run some BLAS-using code in the thread pool ...
 ```
 
@@ -196,12 +197,12 @@ from threadpoolctl import ThreadpoolController
 CONTROLLER = ThreadpoolController()
 
 with CONTROLLER.limit_for_python_threads(limits=1) as limiter:
-    with ThreadPool(4, initializer=limiter.limit_in_pythread) as pool:
+    with ThreadPoolExecutor(4, initializer=limiter.limit_in_pythread) as pool:
         # ... run some BLAS-using code in the thread pool ...
 
 # Later...
 with CONTROLLER.limit_for_python_threads(limits=2) as limiter:
-    with ThreadPool(2, initializer=limiter.limit_in_pythread) as pool:
+    with ThreadPoolExecutor(2, initializer=limiter.limit_in_pythread) as pool:
         # ... run some BLAS-using code in the thread pool ...
 ```
 
@@ -216,7 +217,7 @@ more complex: you need to set the limits each time you switch back and forth.
 Let's say your computer has 4 cores, and you're using some OpenMP API.
 
 ```python
-POOL = ThreadPool(4)
+POOL = ThreadPoolExecutor(4)
 CONTROLLER = ThreadpoolController()
 
 # 1. Run some work in a Python thread pool, which then runs in OpenMP.
