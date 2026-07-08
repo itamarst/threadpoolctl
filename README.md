@@ -152,21 +152,84 @@ The state of these libraries is also accessible through the object oriented API:
 True
 ```
 
-## Usage when using Python threads: Restricting Controlled Library Thread Pool Sizes
+## Usage when not using Python threads: Restricting Controlled Library Thread Pool Sizes
 
 There a two scenarios in which you might want to use `threadpoolctl`; each
 requires you to use different APIs.
 
-1. You will be parallelizing work using a Python thread pool, and your goal is
+1. You do not expect to use any Python threads, so all the work will be started
+   directly from the main thread in the process. This is a simple case
+   where we can globally set thread limits.
+2. You will be parallelizing work using a Python thread pool, and your goal is
    therefore to limit controlled libraries' thread pool sizes when
    concurrently called from Python threads. This case is a bit more
    complex to handle properly and requires a bit more verbose code.
-2. You do not expect to use any Python threads, so all the work will be started
-   directly from the main thread in the process. This is a simple case
-   where we can globally set thread limits.
 
 This section will cover the former case, and the latter is covered in the next
 usage section.
+
+### Setting the Maximum Size of Thread-Pools
+
+Control the number of threads used by the underlying runtime libraries
+in specific sections of your Python program:
+
+```python
+>>> from threadpoolctl import threadpool_limits
+>>> import numpy as np
+
+>>> with threadpool_limits(limits=1, user_api='blas'):
+...     # In this block, calls to blas implementation (like openblas or MKL)
+...     # will be limited to use only one thread. They can thus be used jointly
+...     # with thread-parallelism.
+...     a = np.random.randn(1000, 1000)
+...     a_squared = a @ a
+```
+
+The threadpools can also be controlled via the object oriented API, which is especially
+useful to avoid searching through all the loaded shared libraries each time. It will
+however not act on libraries loaded after the instantiation of the
+`ThreadpoolController`:
+
+```python
+>>> from threadpoolctl import ThreadpoolController
+>>> import numpy as np
+>>> controller = ThreadpoolController()
+
+>>> with controller.limit(limits=1, user_api='blas'):
+...     a = np.random.randn(1000, 1000)
+...     a_squared = a @ a
+```
+
+This should only be used for APIs you expect to be called from the main thread
+of a process, without the use of any Python thread pools.
+
+### Restricting the Limits to the Scope of a Function
+
+`threadpool_limits` and `ThreadpoolController` can also be used as decorators to set
+the maximum number of threads used by the supported libraries at a function level. The
+decorators are accessible through their `wrap` method.
+
+This should only be used for functions you expect to be called from the main
+thread of a process, without the use of any Python thread pools.
+
+```python
+>>> from threadpoolctl import ThreadpoolController, threadpool_limits
+>>> import numpy as np
+>>> controller = ThreadpoolController()
+
+>>> @controller.wrap(limits=1, user_api='blas')
+... # or @threadpool_limits.wrap(limits=1, user_api='blas')
+... def my_func():
+...     # Inside this function, calls to blas implementation (like openblas or MKL)
+...     # will be limited to use only one thread.
+...     a = np.random.randn(1000, 1000)
+...     a_squared = a @ a
+...
+```
+
+## Usage for Python threads: Restricting Controlled Library Thread Pool Sizes
+
+This section covers APIs to use when you will be using Python thread pools to parallelize work.
 
 ### Setting the Maximum Size of Thread-Pools, When Python Thread Pools Are Used
 
@@ -247,69 +310,6 @@ with CONTROLLER.limit_for_python_threads(limits=1) as limiter:
         return do_even_more_real_work_with_openmp(*args, **kwargs)
 
     results3 = POOL.map(limit_then_do_work2, results2)
-```
-
-## Usage for no Python threads: Restricting Controlled Library Thread Pool Sizes
-
-This covers APIs to use when you don't expect to use Python thread pools to parallelize work.
-
-### Setting the Maximum Size of Thread-Pools
-
-Control the number of threads used by the underlying runtime libraries
-in specific sections of your Python program:
-
-```python
->>> from threadpoolctl import threadpool_limits
->>> import numpy as np
-
->>> with threadpool_limits(limits=1, user_api='blas'):
-...     # In this block, calls to blas implementation (like openblas or MKL)
-...     # will be limited to use only one thread. They can thus be used jointly
-...     # with thread-parallelism.
-...     a = np.random.randn(1000, 1000)
-...     a_squared = a @ a
-```
-
-The threadpools can also be controlled via the object oriented API, which is especially
-useful to avoid searching through all the loaded shared libraries each time. It will
-however not act on libraries loaded after the instantiation of the
-`ThreadpoolController`:
-
-```python
->>> from threadpoolctl import ThreadpoolController
->>> import numpy as np
->>> controller = ThreadpoolController()
-
->>> with controller.limit(limits=1, user_api='blas'):
-...     a = np.random.randn(1000, 1000)
-...     a_squared = a @ a
-```
-
-This should only be used for APIs you expect to be called from the main thread
-of a process, without the use of any Python thread pools.
-
-### Restricting the limits to the scope of a function
-
-`threadpool_limits` and `ThreadpoolController` can also be used as decorators to set
-the maximum number of threads used by the supported libraries at a function level. The
-decorators are accessible through their `wrap` method.
-
-This should only be used for functions you expect to be called from the main
-thread of a process, without the use of any Python thread pools.
-
-```python
->>> from threadpoolctl import ThreadpoolController, threadpool_limits
->>> import numpy as np
->>> controller = ThreadpoolController()
-
->>> @controller.wrap(limits=1, user_api='blas')
-... # or @threadpool_limits.wrap(limits=1, user_api='blas')
-... def my_func():
-...     # Inside this function, calls to blas implementation (like openblas or MKL)
-...     # will be limited to use only one thread.
-...     a = np.random.randn(1000, 1000)
-...     a_squared = a @ a
-...
 ```
 
 ## Usage: Additional APIs and details
