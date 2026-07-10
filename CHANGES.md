@@ -1,3 +1,9 @@
+3.7.0 (TBD)
+===========
+
+- Only warn about simultaneous `libomp` and `libiomp` usage on Linux, where the
+  incompatibility is known to cause crashes.
+
 3.6.0 (2025-03-13)
 ==================
 
