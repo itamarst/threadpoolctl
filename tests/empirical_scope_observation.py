@@ -3,22 +3,15 @@ Run this script to empirically determine if OpenMP and BLAS limiting API set
 the size of a shared process-wide thread pool or a per-thread limit.
 """
 
+import sys
 from concurrent.futures import ThreadPoolExecutor
+from os import cpu_count
 from pprint import pprint
 from threading import Thread
 from typing import Callable
 
-try:
-    import numpy as np
-except ImportError:
-    np = None
 import threadpoolctl
 import psutil
-
-try:
-    from tests._openmp_test_helper.openmp_helpers_inner import check_openmp_num_threads
-except ImportError:
-    check_openmp_num_threads = None
 
 
 def start_counting_threads() -> Callable[[], int]:
@@ -43,33 +36,51 @@ def start_counting_threads() -> Callable[[], int]:
     return finish
 
 
-def blas():
-    if np is None:
-        print("BLAS not available")
-        return
+def set_limits():
+    threadpoolctl.threadpool_limits(2)
+    print("== Library info ==")
+    pprint(threadpoolctl.threadpool_info())
+    print()
 
+
+def blas(num_python_threads):
+    try:
+        import numpy as np
+    except ImportError:
+        print("BLAS not available")
+        return False
+
+    set_limits()
     A = np.ones((10_000_000,))
 
     def blas_math(_):
         A.dot(A)
 
-    with ThreadPoolExecutor(20) as pool:
+    with ThreadPoolExecutor(num_python_threads) as pool:
         for _ in pool.map(blas_math, range(400)):
             pass
 
+    return True
 
-def openmp():
-    if check_openmp_num_threads is None:
+def openmp(num_python_threads):
+    try:
+        from tests._openmp_test_helper.openmp_helpers_inner import (
+            check_openmp_num_threads,
+        )
+    except ImportError:
         print("OpenMP not available")
-        return
+        return False
+
+    set_limits()
 
     def run_openmp(_):
         check_openmp_num_threads(1000)
 
-    with ThreadPoolExecutor(20) as pool:
+    with ThreadPoolExecutor(num_python_threads) as pool:
         for _ in pool.map(run_openmp, range(400)):
             pass
 
+    return True
 
 def run(which: str) -> None:
     if which == "blas":
@@ -77,16 +88,20 @@ def run(which: str) -> None:
     else:
         func = openmp
 
+    num_python_threads = 10 * cpu_count()
     count_threads = start_counting_threads()
-    func()
+    if not func(num_python_threads):
+        count_threads()
+        return
     max_num_threads = count_threads()
 
-    # We're creating 20 Python threads, and asking for 2 native threads. If
-    # number is close to 20, we'll assume process-wide shared thread pool. If
-    # the number is close to 40, we'll assume a thread pool per thread.
-    if max_num_threads < 26:
+    # We're creating os.cpu_count() * 10 Python threads, and asking for 2
+    # native threads. If number is close to number of Python threads, we'll
+    # assume process-wide shared thread pool. If the number is close to double
+    # the number of Python threads, we'll assume a thread pool per thread.
+    if max_num_threads < num_python_threads * 1.25:
         scope = "process-wide shared thread pool"
-    elif max_num_threads > 35:
+    elif max_num_threads > num_python_threads * 1.75:
         scope = "thread pool per thread"
     else:
         scope = "not sure"
@@ -98,11 +113,9 @@ def run(which: str) -> None:
 
 
 if __name__ == "__main__":
-    threadpoolctl.threadpool_limits(2)
-    print("== Library info ==")
-    pprint(threadpoolctl.threadpool_info())
-    print()
-
-    run("openmp")
-    print()
-    run("blas")
+    if sys.argv[1] == "openmp":
+        run("openmp")
+    elif sys.argv[1] == "blas":
+        run("blas")
+    else:
+        raise SystemExit("Bad argument")
