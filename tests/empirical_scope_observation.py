@@ -52,7 +52,7 @@ def blas():
     def blas_math(_):
         A.dot(A)
 
-    with ThreadPoolExecutor(100) as pool:
+    with ThreadPoolExecutor(20) as pool:
         for _ in pool.map(blas_math, range(400)):
             pass
 
@@ -65,7 +65,7 @@ def openmp():
     def run_openmp(_):
         check_openmp_num_threads(1000)
 
-    with ThreadPoolExecutor(100) as pool:
+    with ThreadPoolExecutor(20) as pool:
         for _ in pool.map(run_openmp, range(400)):
             pass
 
@@ -80,12 +80,12 @@ def run(which: str) -> None:
     func()
     max_num_threads = count_threads()
 
-    # We're creating 100 Python threads, and asking for 2 native threads. If
-    # number is close to 100, we'll assume process-wide shared thread pool. If
-    # the number is close to 200, we'll assume a thread pool per thread.
-    if max_num_threads < 130:
+    # We're creating 20 Python threads, and asking for 2 native threads. If
+    # number is close to 20, we'll assume process-wide shared thread pool. If
+    # the number is close to 40, we'll assume a thread pool per thread.
+    if max_num_threads < 26:
         scope = "process-wide shared thread pool"
-    elif max_num_threads > 170:
+    elif max_num_threads > 35:
         scope = "thread pool per thread"
     else:
         scope = "not sure"
