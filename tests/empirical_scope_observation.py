@@ -62,6 +62,7 @@ def blas(num_python_threads):
 
     return True
 
+
 def openmp(num_python_threads):
     try:
         from tests._openmp_test_helper.openmp_helpers_inner import (
@@ -81,6 +82,7 @@ def openmp(num_python_threads):
             pass
 
     return True
+
 
 def run(which: str) -> None:
     if which == "blas":
