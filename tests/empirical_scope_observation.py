@@ -1,9 +1,16 @@
+"""
+Run this script to empirically determine if OpenMP and BLAS limiting API set
+the size of a shared process-wide thread pool or a per-thread limit.
+"""
 from concurrent.futures import ThreadPoolExecutor
 from pprint import pprint
 from threading import Thread
 from typing import Callable
 
-import numpy as np
+try:
+    import numpy as np
+except ImportError:
+    np = None
 import threadpoolctl
 import psutil
 
@@ -36,6 +43,10 @@ def start_counting_threads() -> Callable[[], int]:
 
 
 def blas():
+    if np is None:
+        print("BLAS not available")
+        return
+
     A = np.ones((10_000_000,))
 
     def blas_math(_):
