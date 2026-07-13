@@ -18,4 +18,7 @@ fi
 # launching the tests:
 python -m threadpoolctl -i numpy scipy.linalg tests._openmp_test_helper.openmp_helpers_inner
 
+# Introspect API scope:
+PYTHONPATH=. python tests/empirical_scope_observation.py
+
 pytest -vlrxXs -W error -k "$TESTS" --junitxml=test_result.xml --cov=threadpoolctl --cov-report xml
