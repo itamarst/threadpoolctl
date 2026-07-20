@@ -18,13 +18,12 @@ import ctypes
 import itertools
 import textwrap
 from threading import Thread
-from typing import Callable, final
+from typing import Callable, Literal, final
 import warnings
 from ctypes.util import find_library
 from abc import ABC, abstractmethod
 from functools import lru_cache
 from contextlib import ContextDecorator
-from enum import Enum, auto
 
 __version__ = "3.7.0.dev0"
 __all__ = [
@@ -71,20 +70,18 @@ except AttributeError:
     _RTLD_NOLOAD = ctypes.DEFAULT_MODE
 
 
-class _ThreadLimitScope(Enum):
-    """
-    What scope does the API affect.
-    """
-
+# What scope does the API affect?
+_ThreadLimitScope = Literal[
     # Using the API sets a limit only on the current thread.
-    CURRENT_THREAD = auto()
+    "current_thread",
     # Using the API sets a limit for every thread in the process; whether or
     # not it's a shared process-wide pool or per-thread limit needs to be
     # determined some other way.
-    PROCESS = auto()
+    "process",
     # Something else, unexpected; perhaps another variant, perhaps information
     # can't be determined under the current configuration.
-    UNKNOWN = auto()
+    "unknown",
+]
 
 
 def _determine_thread_limit_scope(
@@ -140,18 +137,18 @@ def _determine_thread_limit_scope(
         # pass the safety check at the start of the function. Perhaps
         # cpu_count() from loky should be moved into this package...
         if thread_result != [expected]:
-            return _ThreadLimitScope.UNKNOWN
+            return "unknown"
 
         # Now, check this thread:
         if get_n_threads() == expected:
             # Setting modified this thread's results too:
-            return _ThreadLimitScope.PROCESS
+            return "process"
         elif get_n_threads() == previous:
             # Setting modified the other thread, but not this one:
-            return _ThreadLimitScope.CURRENT_THREAD
+            return "current_thread"
         else:
             # No idea what's going on:
-            return _ThreadLimitScope.UNKNOWN
+            return "unknown"
     finally:
         set_n_threads(previous)
 
@@ -223,7 +220,7 @@ class LibController(ABC):
         if debugging_info:
             result["thread_limit_scope"] = _determine_thread_limit_scope(
                 self.get_num_threads, self.set_num_threads
-            ).name.lower()
+            )
         return result
 
     def set_additional_attributes(self):

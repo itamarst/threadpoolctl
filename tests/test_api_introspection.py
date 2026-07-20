@@ -9,7 +9,6 @@ from typing import Callable
 import pytest
 
 from threadpoolctl import (
-    _ThreadLimitScope,
     LibController,
     _determine_thread_limit_scope,
     ThreadpoolController,
@@ -48,10 +47,7 @@ def test_determine_thread_limit_scope_thread_local() -> None:
     thread-local implementation.
     """
     api = FakeThreadLocalAPI()
-    assert (
-        _determine_thread_limit_scope(api.get, api.set)
-        == _ThreadLimitScope.CURRENT_THREAD
-    )
+    assert _determine_thread_limit_scope(api.get, api.set) == "current_thread"
 
 
 @pytest.mark.parametrize("default", [1, 17])
@@ -61,7 +57,7 @@ def test_determine_thread_limit_scope_processwide(default: int) -> None:
     process-wide implementation.
     """
     api = FakeProcesswideAPI(default)
-    assert _determine_thread_limit_scope(api.get, api.set) == _ThreadLimitScope.PROCESS
+    assert _determine_thread_limit_scope(api.get, api.set) == "process"
 
 
 @pytest.mark.skipif(
@@ -72,7 +68,7 @@ def test_determine_thread_limit_scope_processwide(default: int) -> None:
     [
         (
             {"internal_api": "openblas"},
-            _ThreadLimitScope.PROCESS,
+            "process",
             # Different backends have different behavior; on Linux OpenMP is
             # thread-local, for example, for libgomp/libomp at least. Since it
             # depends on the specific OpenMP behavior, and since the goal here
@@ -81,7 +77,7 @@ def test_determine_thread_limit_scope_processwide(default: int) -> None:
             # pthreads here.
             lambda lib: lib.threading_layer == "pthreads",
         ),
-        ({"user_api": "openmp"}, _ThreadLimitScope.CURRENT_THREAD, lambda _lib: True),
+        ({"user_api": "openmp"}, "current_thread", lambda _lib: True),
     ],
 )
 def test_api_scope(
