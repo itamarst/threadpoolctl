@@ -15,23 +15,23 @@ import psutil
 
 
 def start_counting_threads() -> Callable[[], int]:
-    num_threads = 0
+    max_num_threads = 0
     stop = False
 
     def in_thread():
-        nonlocal num_threads, stop
+        nonlocal max_num_threads, stop
         process = psutil.Process()
         while not stop:
-            num_threads = max(num_threads, process.num_threads())
+            max_num_threads = max(max_num_threads, process.num_threads())
 
     thread = Thread(target=in_thread)
     thread.start()
 
     def finish():
-        nonlocal stop, num_threads
+        nonlocal stop, max_num_threads
         stop = True
         thread.join()
-        return num_threads
+        return max_num_threads
 
     return finish
 
