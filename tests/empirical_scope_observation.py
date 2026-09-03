@@ -51,14 +51,16 @@ def blas(num_python_threads):
         return False
 
     set_limits()
-    A = np.ones((10_000_000,))
+    A = np.ones((1024, 1024))
 
     def blas_math(_):
         A.dot(A)
 
     with ThreadPoolExecutor(num_python_threads) as pool:
-        for _ in pool.map(blas_math, range(400)):
-            pass
+        t0 = time()
+        while time() - t0 < 5:
+            for _ in pool.map(blas_math, range(40)):
+                pass
 
     return True
 
@@ -109,6 +111,10 @@ def run(which: str) -> None:
         scope = "not sure"
 
     print(f"== Observed behavior: {which} ==")
+    print(
+        f"10x{cpu_count()} Python threads each running a parallel "
+        "workload with a 2 thread limit."
+    )
     print("Maximum number of observed threads:", max_num_threads)
     print("Presumed API scope:", scope)
     print()
