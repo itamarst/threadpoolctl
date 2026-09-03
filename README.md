@@ -224,7 +224,11 @@ initializer function that will get called on thread startup.
 from threadpoolctl import threadpool_limits
 from concurrent.futures import ThreadPoolExecutor
 
-with threadpool_limits(limits=1) as limiter:
+# This top-level limiter doesn't actually change the limits initially; it is
+# there to ensure the limits are reset _after_ the Python thread pool is done.
+# This is necessary because some underlying limiting APIs operate on a
+# process-wide basis.
+with threadpool_limits():
     # Make sure each Python worker thread also calls threadpool_limits(). If
     # you're using another thread pool class, you will need to do so some other
     # way.
@@ -243,19 +247,36 @@ from threadpoolctl import ThreadpoolController
 CONTROLLER = ThreadpoolController()
 
 with (
-    CONTROLLER.limit(limits=1),
-    ThreadPoolExecutor(4, initializer=lambda: CONTROLLER.limit(1)) as pool,
+    CONTROLLER.limit(),
+    ThreadPoolExecutor(4, initializer=lambda: CONTROLLER.limit(limits=1)) as pool,
 ):
     # ... run some BLAS-using code in the thread pool ...
     pool.map(somefunc, someargs)
 
 # Later...
 with (
-    CONTROLLER.limit(limits=2),
-    ThreadPoolExecutor(4, initializer=lambda: CONTROLLER.limit(2)) as pool,
+    CONTROLLER.limit(),
+    ThreadPoolExecutor(4, initializer=lambda: CONTROLLER.limit(limits=2)) as pool,
 ):
     # ... run some BLAS-using code in the thread pool ...
     pool.map(somefunc, someargs)
+```
+
+You can also operate without a context manager:
+
+```python
+from threadpoolctl import ThreadpoolController
+
+CONTROLLER = ThreadpoolController():
+try:
+    limiter = controller.limit()
+    with ThreadPoolExecutor(
+            4, initializer=lambda: controller.limit(limits=1)) as pool:
+        # ... run some BLAS-using code in the thread pool ...
+        pool.map(somefunc, someargs)
+finally:
+    limiter.restore_original_limits()
+
 ```
 
 ### Switching Back And Forth Between Main Thread and Python Threads
