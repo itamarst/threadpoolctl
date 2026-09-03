@@ -8,19 +8,6 @@ Fine control of the underlying thread-pool size can be useful in
 workloads that involve nested parallelism so as to mitigate
 oversubscription issues.
 
-> **Important:** In its current state, `threadpoolctl` is only designed for
-> situations where BLAS and OpenMP are only called from the main Python thread.
-> Or, to be more accurate, `threadpoolctl` and BLAS/OpenMP APIs should only ever
-> called from the same, single Python thread. For example:
->
-> * When you're using it to configure a worker in a process pool, which then calls BLAS or OpenMP APIs directly in the main thread.
-> * A Jupyter notebook, where the BLAS or OpenMP APIs are being called from code running in the cell's main thread.
->
-> However, once you start calling BLAS or OpenMP APIs and `threadpoolctl` from
-> multiple different Python threads, the impact of the `threadpoolctl` limiting
-> APIs will be very inconsistent. For more details and a plan to fix this, see
-> https://github.com/joblib/threadpoolctl/issues/208
-
 ## Installation
 
 - For users, install the last published version from PyPI:
@@ -240,13 +227,17 @@ do so by passing in an initializer function that will get called on thread
 startup.
 
 ```python
-from threadpoolctl import LimiterForPythonThreads
+from threadpoolctl import threadpool_limits
 from concurrent.futures import ThreadPoolExecutor
 
-with limit_for_python_threads(limits=1, user_api='blas') as limiter:
-    # Make sure each Python thread calls limiter.limit_in_pythread(). If you're
-    # using another thread pool class, you will need to do some other way.
-    with ThreadPoolExecutor(4, initializer=limiter.limit_in_pythread) as pool:
+with threadpool_limits(limits=1) as limiter:
+    # Make sure each Python worker thread also calls threadpool_limits(). If
+    # you're using another thread pool class, you will need to do so some other
+    # way.
+    with ThreadPoolExecutor(
+            4,
+            initializer=lambda: threadpool_limits(limits=1)
+    ) as pool:
         # ... run some BLAS-using code in the thread pool ...
 ```
 
@@ -259,13 +250,17 @@ from threadpoolctl import ThreadpoolController
 # This won't have any side-effects:
 CONTROLLER = ThreadpoolController()
 
-with CONTROLLER.limit_for_python_threads(limits=1) as limiter:
-    with ThreadPoolExecutor(4, initializer=limiter.limit_in_pythread) as pool:
+with CONTROLLER.limit(limits=1), ThreadPoolExecutor(
+        4,
+        initializer=lambda: CONTROLLER.limit(1)
+    ) as pool:
         # ... run some BLAS-using code in the thread pool ...
 
 # Later...
-with CONTROLLER.limit_for_python_threads(limits=2) as limiter:
-    with ThreadPoolExecutor(2, initializer=limiter.limit_in_pythread) as pool:
+with CONTROLLER.limit(limits=2), ThreadPoolExecutor(
+        4,
+        initializer=lambda: CONTROLLER.limit(2)
+    ) as pool:
         # ... run some BLAS-using code in the thread pool ...
 ```
 
@@ -284,11 +279,11 @@ POOL = ThreadPoolExecutor(4)
 CONTROLLER = ThreadpoolController()
 
 # 1. Run some work in a Python thread pool, which then runs in OpenMP.
-with CONTROLLER.limit_for_python_threads(limits=1) as limiter:
+with CONTROLLER.limit(limits=1) as limiter:
 
     def limit_then_do_work(*args, **kwargs):
         # Set a limit on OpenMP in the current thread:
-        limiter.limit_in_pythread()
+        CONTROLLER.limit(limits=1)
         # Do the actual work:
         return do_real_work_with_openmp(*args, **kwargs)
 
@@ -296,17 +291,15 @@ with CONTROLLER.limit_for_python_threads(limits=1) as limiter:
 
 
 # 2. Run some work directly in main thread, using OpenMP.
-
-# Use API for for non-Python threads, see next section for more:
 with CONTROLLER.limit(limits=1):
     results2 = do_more_work_with_openmp(results)
 
 
-# 3. Do more work in a Python thread pool:
-with CONTROLLER.limit_for_python_threads(limits=1) as limiter:
+# 3. Do more work in a Python thread pool, this time with more parallelism:
+with CONTROLLER.limit(limits=2) as limiter:
 
     def limit_then_do_work2(*args, **kwargs):
-        limiter.limit_in_pythread()
+        limiter.limit(limits=2)
         return do_even_more_real_work_with_openmp(*args, **kwargs)
 
     results3 = POOL.map(limit_then_do_work2, results2)
