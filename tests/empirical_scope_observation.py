@@ -7,6 +7,7 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 from os import cpu_count
 from pprint import pprint
+from time import time
 from threading import Thread
 from typing import Callable
 
@@ -80,8 +81,10 @@ def openmp(num_python_threads):
         check_openmp_num_threads(1000)
 
     with ThreadPoolExecutor(num_python_threads) as pool:
-        for _ in pool.map(run_openmp, range(400)):
-            pass
+        t0 = time()
+        while time() - t0 < 5:
+            for _ in pool.map(run_openmp, range(40)):
+                pass
 
     return True
 
@@ -115,7 +118,10 @@ def run(which: str) -> None:
         f"10x{cpu_count()} Python threads each running a parallel "
         "workload with a 2 thread limit."
     )
-    print("Maximum number of observed threads:", max_num_threads)
+    print(
+        f"Maximum number of observed threads (includes Python and {which} threads):",
+        max_num_threads,
+    )
     print("Presumed API scope:", scope)
     print()
 
