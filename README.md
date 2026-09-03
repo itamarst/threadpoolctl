@@ -187,17 +187,11 @@ however not act on libraries loaded after the instantiation of the
 ...     a_squared = a @ a
 ```
 
-This should only be used for APIs you expect to be called from the main thread
-of a process, without the use of any Python thread pools.
-
 ### Restricting the Limits to the Scope of a Function
 
 `threadpool_limits` and `ThreadpoolController` can also be used as decorators to set
 the maximum number of threads used by the supported libraries at a function level. The
 decorators are accessible through their `wrap` method.
-
-This should only be used for functions you expect to be called from the main
-thread of a process, without the use of any Python thread pools.
 
 ```python
 >>> from threadpoolctl import ThreadpoolController, threadpool_limits
@@ -221,10 +215,10 @@ This section covers APIs to use when you will be using Python thread pools to pa
 ### Setting the Maximum Size of Thread-Pools, When Python Thread Pools Are Used
 
 Limiting thread pool size in controlled libraries requires a two-step process.
-Importantly, each Python thread must call a method to limit controlled libraries
-in that thread. With Python's `concurrent.futures.ThreadPoolExecutor`, you can
-do so by passing in an initializer function that will get called on thread
-startup.
+**Importantly, each Python worker thread must also call a method to limit
+controlled libraries in that thread.** With Python's
+`concurrent.futures.ThreadPoolExecutor`, you can do so by passing in an
+initializer function that will get called on thread startup.
 
 ```python
 from threadpoolctl import threadpool_limits
@@ -234,11 +228,9 @@ with threadpool_limits(limits=1) as limiter:
     # Make sure each Python worker thread also calls threadpool_limits(). If
     # you're using another thread pool class, you will need to do so some other
     # way.
-    with ThreadPoolExecutor(
-            4,
-            initializer=lambda: threadpool_limits(limits=1)
-    ) as pool:
+    with ThreadPoolExecutor(4, initializer=lambda: threadpool_limits(limits=1)) as pool:
         # ... run some BLAS-using code in the thread pool ...
+        pool.map(somefunc, someargs)
 ```
 
 To prevent loading shared libraries repeatedly, you can reuse a
@@ -250,18 +242,20 @@ from threadpoolctl import ThreadpoolController
 # This won't have any side-effects:
 CONTROLLER = ThreadpoolController()
 
-with CONTROLLER.limit(limits=1), ThreadPoolExecutor(
-        4,
-        initializer=lambda: CONTROLLER.limit(1)
-    ) as pool:
-        # ... run some BLAS-using code in the thread pool ...
+with (
+    CONTROLLER.limit(limits=1),
+    ThreadPoolExecutor(4, initializer=lambda: CONTROLLER.limit(1)) as pool,
+):
+    # ... run some BLAS-using code in the thread pool ...
+    pool.map(somefunc, someargs)
 
 # Later...
-with CONTROLLER.limit(limits=2), ThreadPoolExecutor(
-        4,
-        initializer=lambda: CONTROLLER.limit(2)
-    ) as pool:
-        # ... run some BLAS-using code in the thread pool ...
+with (
+    CONTROLLER.limit(limits=2),
+    ThreadPoolExecutor(4, initializer=lambda: CONTROLLER.limit(2)) as pool,
+):
+    # ... run some BLAS-using code in the thread pool ...
+    pool.map(somefunc, someargs)
 ```
 
 ### Switching Back And Forth Between Main Thread and Python Threads
