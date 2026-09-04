@@ -293,7 +293,7 @@ Let's say your computer has 4 cores, and you're using some OpenMP API.
 POOL = ThreadPoolExecutor(4)
 CONTROLLER = ThreadpoolController()
 
-# 1. Run some work in a Python thread pool, which then runs in OpenMP.
+# 1. Run some work in a Python thread pool (OpenMP effectively disabled).
 with CONTROLLER.limit(limits=1) as limiter:
 
     def limit_then_do_work(*args, **kwargs):
@@ -305,12 +305,12 @@ with CONTROLLER.limit(limits=1) as limiter:
     results = POOL.map(limit_then_do_work, args)
 
 
-# 2. Run some work directly in main thread, using OpenMP.
+# 2. Run some work serially in main thread (OpenMP effectively disabled).
 with CONTROLLER.limit(limits=1):
     results2 = do_more_work_with_openmp(results)
 
 
-# 3. Do more work in a Python thread pool, this time with more parallelism:
+# 3. Nest some OpenMP parallelism under Python-level parallelism:
 with CONTROLLER.limit(limits=2) as limiter:
 
     def limit_then_do_work2(*args, **kwargs):
