@@ -521,6 +521,10 @@ Current libraries where `threadpoolctl` explicitly makes this choice are:
 * MKL, for all threading backends.
 * OpenBLAS (v0.3.34 or later) when using the OpenMP backend, on Linux and macOS.
 
+When using OpenMP, this is also the default on Linux and macOS. On Windows
+OpenMP has a per-thread worker pool but the limiting API affects all threads in
+the process, not just the current one.
+
 ### Checking the behavior of your installed libraries
 
 When you run `python -m threadpoolctl` it will include the scope of the API
@@ -547,13 +551,17 @@ $ python -m threadpoolctl -i numpy
 ]
 ```
 
-You can also use another script to empirically determine both the kind and scope of the API:
+You can also use another script to empirically determine both the kind and scope of the API. From a checkout of the [`threadpoolctl` GitHub repo](https://github.com/joblib/threadpoolctl):
 
 ```shell-session
-
+$ python -m tests.empirical_scope_observation blas
+== Observed behavior: blas ==
+10x12 Python threads each running a parallel workload with a 2 thread limit.
+Maximum number of observed threads (includes Python and blas threads): 53
+Presumed API scope: process-wide shared thread pool
 ```
 
-You can also call this script with `openmp` instead of `blas`.
+You can also call this script with an `openmp` argument instead of `blas`.
 
 ## Maintainers
 
