@@ -8,6 +8,10 @@ Fine control of the underlying thread-pool size can be useful in
 workloads that involve nested parallelism so as to mitigate
 oversubscription issues.
 
+Note that "limiting the number of threads" in practice involves a variety of
+potential semantics depending on the underlying third-party library; see the
+section on [semantics](#semantics) below.
+
 ## Installation
 
 - For users, install the last published version from PyPI:
@@ -458,11 +462,98 @@ https://github.com/xianyi/OpenBLAS/issues/2985).
   the underlying library. For more details see
   https://github.com/joblib/threadpoolctl/issues/208
 
-  For example, if you're using OpenMP with libgomp (gcc) or libomp (clang), the
+  For example, if you're using OpenMP with libgomp (gcc) or libomp (clang**, the
   setting is thread-local and sets how many OpenMP threads will be started in
   the current thread. On the other hand, with OpenBLAS with pthreads backend or
   on Windows, the setting is process-wide and impacts the size of a process-wide
   thread pool shared across all threads in the process.
+
+## Semantics of thread limiting <a name="semantics">
+
+Setting the number of threads may seem like a simple operation, but in practice
+it can do quite different things depending on the underlying third-party library
+being limited.
+
+### Kind of thread pool
+
+* In some libraries, there is a shared process-wide thread pool. Setting the
+  number of threads changes the size of this shared pool.
+* In other libraries, there is a thread pool per calling thread. So each Python
+  thread gets its own personal thread pool from the third-party library.
+
+To give a concrete example: if you have 10 cores, and you're using OpenBLAS with
+the `pthreads` backend on Linux, by default there is a single 10-worker pool of
+threads created by OpenBLAS. If you start 10 Python threads, each calling BLAS
+routines, all those Python threads will feed into that single 10-thread pool.
+In total, you will have 20 threads running (10 Python, 10 OpenBLAS).
+
+On the other hand, if you use MKL, each Python thread gets its own individual
+pool of worker threads from MKL, so if each Python threads calls a BLAS routine
+in MKL, you will get 10×10 = 100 MKL threads!
+
+### Scope of limiting
+
+If you have a third-party library that creates a thread pool per calling thread,
+there is another question about what limiting the number of threads means: which
+threads are affected by the limiting API?
+
+* **All threads in the process:** In this case, setting the limits changes it
+  for all threads in the process. So if you limit from the main Python thread,
+  all other Python threads will have the same limit.
+* **Current thread only:** Only the current thread's thread pool size will be
+  limited.
+
+MKL for example has two APIs, covering both cases,
+[`mkl_set_num_threads()`](https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2026-0/mkl-set-num-threads.html)
+and [`mkl_set_num_threads_local()`](https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2026-0/mkl-set-num-threads-local.html) respectively.
+
+### `threadpoolctl`'s policy for thread limiting
+
+When there is a choice between different APIs, `threadpoolctl` will prefer APIs
+that:
+
+1. Have a per-thread worker pool (so each Python thread gets its own pool from
+   the underlying third-party library)
+2. Only affect the current thread.
+
+Current libraries where `threadpoolctl` explicitly makes this choice are:
+
+* MKL, for all threading backends.
+* OpenBLAS (v0.3.34 or later) when using the OpenMP backend, on Linux and macOS.
+
+### Checking the behavior of your installed libraries
+
+When you run `python -m threadpoolctl` it will include the scope of the API
+limit in the `"thread_limit_scope"` field, with the value of `"process"`
+indicating the API affects the whole process and `"current_thread"` indicating a
+per-thread thread pool. Information about the kind of limiting in the former
+case (shared process-wide pool, or per-thread pool) is not included.
+
+Here is example output for OpenBLAS with pthreads:
+
+```shell-session
+$ python -m threadpoolctl -i numpy
+[
+  {
+    "user_api": "blas",
+    "internal_api": "openblas",
+    "num_threads": 12,
+    "prefix": "libscipy_openblas",
+    "version": "0.3.33.112.0",
+    "threading_layer": "pthreads",
+    "architecture": "Haswell",
+    "thread_limit_scope": "process"
+  }
+]
+```
+
+You can also use another script to empirically determine both the kind and scope of the API:
+
+```shell-session
+
+```
+
+You can also call this script with `openmp` instead of `blas`.
 
 ## Maintainers
 
